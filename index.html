@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flower Remote</title>
+<style>
+  :root {
+    --bg: #f4f2f7;
+    --card: #ffffff;
+    --text: #1d1a24;
+    --muted: #6d6878;
+    --line: #e3dfea;
+    --accent: #d6367a;
+    --accent-text: #ffffff;
+    --ok: #1f9d55;
+    --warn: #d08a00;
+    --off: #9a95a4;
+    --btn: #efecf4;
+    --btn-text: #1d1a24;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121016;
+      --card: #1d1a24;
+      --text: #f1eef6;
+      --muted: #9e98aa;
+      --line: #2d2937;
+      --accent: #ff5c9d;
+      --accent-text: #1a0610;
+      --ok: #3ccf7d;
+      --warn: #f0b429;
+      --off: #6d6878;
+      --btn: #2a2633;
+      --btn-text: #f1eef6;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    -webkit-tap-highlight-color: transparent;
+  }
+  main { max-width: 440px; margin: 0 auto; display: grid; gap: 14px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  h1 { font-size: 22px; margin: 0; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: 999px;
+    background: var(--card); border: 1px solid var(--line);
+    font-size: 14px; white-space: nowrap;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--off); }
+  .pill[data-state="connected"] .dot { background: var(--ok); }
+  .pill[data-state="connecting"] .dot { background: var(--warn); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: 16px;
+  }
+  .notice { border-color: var(--warn); font-size: 14px; }
+  .notice b { color: var(--warn); }
+
+  .now-label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; }
+  .now-name { font-size: 26px; font-weight: 700; margin: 2px 0 10px; overflow-wrap: anywhere; }
+  .now-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag {
+    font-size: 13px; padding: 3px 10px; border-radius: 999px;
+    background: var(--btn); color: var(--muted);
+  }
+  .tag.on { background: var(--accent); color: var(--accent-text); }
+
+  .bright-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+  .bar { flex: 1; height: 8px; border-radius: 4px; background: var(--btn); overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .bright-num { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; min-width: 3.5em; text-align: right; }
+
+  button, select, input {
+    font: inherit; color: var(--btn-text);
+    border: 0; border-radius: 14px; background: var(--btn);
+  }
+  button {
+    min-height: 56px; padding: 0 12px; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    touch-action: manipulation;
+  }
+  button:active:not(:disabled) { transform: scale(.97); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-text); }
+  button.on { background: var(--accent); color: var(--accent-text); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .big { font-size: 20px; min-height: 72px; }
+  .icon { font-size: 22px; line-height: 1; }
+
+  label.field { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+  select { min-height: 50px; padding: 0 12px; width: 100%; }
+
+  details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  .log {
+    margin-top: 10px; height: 180px; overflow-y: auto;
+    font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace;
+    background: var(--bg); border-radius: 10px; padding: 8px 10px;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .log .out { color: var(--accent); }
+  .log .err { color: var(--warn); }
+  .send-row { display: flex; gap: 8px; margin-top: 10px; }
+  .send-row input { flex: 1; min-width: 0; min-height: 48px; padding: 0 12px; }
+  .send-row button { min-height: 48px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Flower Remote</h1>
+    <span class="pill" id="pill" data-state="disconnected"><span class="dot"></span><span id="pillText">Disconnected</span></span>
+  </header>
+
+  <div class="card notice" id="noBt" hidden>
+    <b>Bluetooth isn't available in this browser.</b><br>
+    On iPhone, open this page in the free <b>Bluefy</b> app (Safari can't use Bluetooth).
+    On a PC or Android, use Chrome or Edge.
+  </div>
+
+  <button class="primary big" id="connectBtn">Connect to Flower</button>
+
+  <section class="card">
+    <div class="now-label">Now playing</div>
+    <div class="now-name" id="nowName">—</div>
+    <div class="now-meta">
+      <span class="tag" id="tagNum">#–</span>
+      <span class="tag" id="tagMode">–</span>
+      <span class="tag" id="tagPower">–</span>
+    </div>
+    <div class="bright-row">
+      <span class="icon" aria-hidden="true">☀</span>
+      <div class="bar"><div id="brightBar"></div></div>
+      <span class="bright-num" id="brightNum">–</span>
+    </div>
+  </section>
+
+  <div class="grid">
+    <button class="big ctl" data-cmd="prev"><span class="icon">◀</span> Back</button>
+    <button class="big ctl" data-cmd="next">Next <span class="icon">▶</span></button>
+    <button class="ctl" data-cmd="down"><span class="icon">−</span> Dimmer</button>
+    <button class="ctl" data-cmd="up"><span class="icon">+</span> Brighter</button>
+    <button class="ctl" id="cycleBtn"><span class="icon">⟳</span> <span id="cycleText">Cycle</span></button>
+    <button class="ctl" id="powerBtn"><span class="icon">⏻</span> <span id="powerText">On / Off</span></button>
+  </div>
+
+  <section class="card">
+    <label class="field">Pick a pattern
+      <select id="patternSel" class="ctl"></select>
+    </label>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Messages &amp; custom commands</summary>
+      <div class="log" id="log"></div>
+      <form class="send-row" id="sendForm">
+        <input id="cmdInput" class="ctl" placeholder="e.g. list, help, 35" autocomplete="off" autocapitalize="off">
+        <button class="ctl" type="submit">Send</button>
+      </form>
+    </details>
+  </section>
+</main>
+
+<script>
+  // Must match the sketch (Nordic UART Service).
+  const NUS = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+  const RX  = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // we write commands here
+  const TX  = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // ESP32 replies here
+
+  // Same order as the pattern list in the sketch.
+  const PATTERNS = [
+    "Breath", "Rainbow Cycle", "Color Wipe Random", "Multi Dynamic", "Rainbow", "Fade",
+    "Theater Chase Rainbow", "Running Lights", "Twinkle Random", "Chase Random", "Chase Rainbow",
+    "Chase Flash Random", "Chase Rainbow White", "Color Sweep Random", "Running Random",
+    "Merry Christmas", "Halloween",
+    "Petals 1", "Petals 2", "Petals 3", "Petals 4", "Petals 5", "Petals 6", "Petals 7", "Petals 8", "Petals 9",
+    "Blink", "Gradient", "Twinkle", "Cherry Blossom", "Purple Dream", "Cyberpunk", "Candy Stripe",
+    "Sunrise", "Sunrise 2", "Galaxy", "Ice and Fire", "Lollipop", "Sunset", "Ocean", "Pulse", "Party",
+    "Flower Garden", "Rainbow Breath", "Plasma", "Color Blocks", "Rainbow Waves"
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const enc = new TextEncoder();
+  const dec = new TextDecoder();
+
+  let device = null;
+  let rxChar = null;
+  let incoming = "";
+  let writes = Promise.resolve();
+  const state = { on: true, cycle: false, pattern: null, bright: null };
+
+  // ---------- UI ----------
+  const sel = $("patternSel");
+  sel.append(new Option("Choose…", "", true, true));
+  sel.options[0].disabled = true;
+  PATTERNS.forEach((name, i) => sel.append(new Option(`${i}  ${name}`, i)));
+
+  function log(text, cls) {
+    const line = document.createElement("div");
+    if (cls) line.className = cls;
+    line.textContent = text;
+    const box = $("log");
+    box.append(line);
+    while (box.childNodes.length > 200) box.firstChild.remove();
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function setConn(s) {
+    $("pill").dataset.state = s;
+    $("pillText").textContent = { connected: "Connected", connecting: "Connecting…", disconnected: "Disconnected" }[s];
+    const btn = $("connectBtn");
+    btn.disabled = s === "connecting";
+    btn.textContent = s === "connected" ? "Disconnect" : s === "connecting" ? "Connecting…" : (device ? "Reconnect" : "Connect to Flower");
+    btn.classList.toggle("primary", s !== "connected");
+    document.querySelectorAll(".ctl").forEach((el) => (el.disabled = s !== "connected"));
+  }
+
+  function render() {
+    const known = state.pattern !== null;
+    $("nowName").textContent = known ? (state.on ? PATTERNS[state.pattern] ?? "?" : "Lights off") : "—";
+    $("tagNum").textContent = known ? `#${state.pattern}` : "#–";
+    $("tagMode").textContent = known ? (state.cycle ? "Cycling" : "Single") : "–";
+    $("tagMode").classList.toggle("on", known && state.cycle);
+    $("tagPower").textContent = known ? (state.on ? "On" : "Off") : "–";
+    $("tagPower").classList.toggle("on", known && state.on);
+    $("cycleBtn").classList.toggle("on", known && state.cycle);
+    $("cycleText").textContent = known && state.cycle ? "Cycling" : "Cycle";
+    $("powerBtn").classList.toggle("on", known && state.on);
+    $("powerText").textContent = !known ? "On / Off" : state.on ? "Turn off" : "Turn on";
+    if (state.bright !== null) {
+      const pct = Math.round((state.bright / 255) * 100);
+      $("brightBar").style.width = pct + "%";
+      $("brightNum").textContent = pct + "%";
+    }
+    if (known && document.activeElement !== sel) sel.value = state.pattern;
+  }
+
+  // ---------- Bluetooth ----------
+  async function connect() {
+    try {
+      setConn("connecting");
+      if (!device) {
+        device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [NUS] }, { name: "Flower" }],
+          optionalServices: [NUS],
+        });
+        device.addEventListener("gattserverdisconnected", onDisconnected);
+      }
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService(NUS);
+      rxChar = await service.getCharacteristic(RX);
+      const txChar = await service.getCharacteristic(TX);
+      txChar.addEventListener("characteristicvaluechanged", onData);
+      await txChar.startNotifications();
+      setConn("connected");
+      log(`Connected to ${device.name || "Flower"}`);
+      send("status");
+    } catch (e) {
+      if (e.name === "NotFoundError") log("No device chosen", "err");
+      else log("Couldn't connect: " + e.message, "err");
+      if (device && device.gatt.connected) device.gatt.disconnect();
+      setConn("disconnected");
+    }
+  }
+
+  function onDisconnected() {
+    rxChar = null;
+    setConn("disconnected");
+    log("Disconnected", "err");
+  }
+
+  function send(cmd) {
+    if (!rxChar) return;
+    log("> " + cmd, "out");
+    // Bluetooth allows one write at a time, so queue them.
+    writes = writes
+      .then(() => rxChar && rxChar.writeValue(enc.encode(cmd)))
+      .catch((e) => log("Send failed: " + e.message, "err"));
+  }
+
+  function onData(event) {
+    incoming += dec.decode(event.target.value);
+    const lines = incoming.split("\n");
+    incoming = lines.pop(); // keep any half line for the next packet
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (line.startsWith("#S|")) {
+        const [, on, cycle, n, bright] = line.split("|");
+        state.on = on === "1";
+        state.cycle = cycle === "1";
+        state.pattern = Number(n);
+        state.bright = Number(bright);
+        render();
+      } else {
+        log(line);
+      }
+    }
+  }
+
+  // ---------- Buttons ----------
+  $("connectBtn").addEventListener("click", () => {
+    if (device && device.gatt.connected) device.gatt.disconnect();
+    else connect();
+  });
+  document.querySelectorAll("[data-cmd]").forEach((b) =>
+    b.addEventListener("click", () => send(b.dataset.cmd))
+  );
+  $("cycleBtn").addEventListener("click", () => send(state.cycle ? "stay" : "cycle"));
+  $("powerBtn").addEventListener("click", () => send(state.on ? "off" : "on"));
+  sel.addEventListener("change", () => { if (sel.value !== "") send(sel.value); sel.blur(); });
+  $("sendForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const v = $("cmdInput").value.trim();
+    if (v) send(v);
+    $("cmdInput").value = "";
+  });
+
+  if (!navigator.bluetooth) {
+    $("noBt").hidden = false;
+    $("connectBtn").disabled = true;
+  }
+  setConn("disconnected");
+  if (!navigator.bluetooth) $("connectBtn").disabled = true;
+  render();
+</script>
+</body>
+</html>
