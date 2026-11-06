@@ -97,6 +97,11 @@
   .big { font-size: 20px; min-height: 72px; }
   .icon { font-size: 22px; line-height: 1; }
 
+  .speed-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .speed-val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .speed-btns { display: flex; gap: 10px; }
+  .speed-btns button { width: 64px; font-size: 24px; }
+
   label.field { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
   select { min-height: 50px; padding: 0 12px; width: 100%; }
 
@@ -153,6 +158,28 @@
     <button class="ctl" id="powerBtn"><span class="icon">⏻</span> <span id="powerText">On / Off</span></button>
   </div>
 
+  <section class="card speed-row">
+    <div>
+      <div class="now-label">Cycle time per pattern</div>
+      <div class="speed-val" id="speedVal">–</div>
+    </div>
+    <div class="speed-btns">
+      <button class="ctl" data-cmd="faster" aria-label="Shorter time">−</button>
+      <button class="ctl" data-cmd="slower" aria-label="Longer time">+</button>
+    </div>
+  </section>
+
+  <section class="card speed-row">
+    <div>
+      <div class="now-label">Animation speed</div>
+      <div class="speed-val" id="animVal">–</div>
+    </div>
+    <div class="speed-btns">
+      <button class="ctl" data-cmd="speed-" aria-label="Slower animation">−</button>
+      <button class="ctl" data-cmd="speed+" aria-label="Faster animation">+</button>
+    </div>
+  </section>
+
   <section class="card">
     <label class="field">Pick a pattern
       <select id="patternSel" class="ctl"></select>
@@ -197,7 +224,13 @@
   let rxChar = null;
   let incoming = "";
   let writes = Promise.resolve();
-  const state = { on: true, cycle: false, pattern: null, bright: null };
+  const state = { on: true, cycle: false, pattern: null, bright: null, secs: null, anim: null };
+
+  function formatSecs(s) {
+    if (s < 60) return s + " s";
+    const m = Math.floor(s / 60), r = s % 60;
+    return r ? `${m} min ${r} s` : `${m} min`;
+  }
 
   // ---------- UI ----------
   const sel = $("patternSel");
@@ -242,6 +275,8 @@
       $("brightBar").style.width = pct + "%";
       $("brightNum").textContent = pct + "%";
     }
+    if (state.secs !== null) $("speedVal").textContent = formatSecs(state.secs);
+    if (state.anim !== null) $("animVal").textContent = state.anim === 100 ? "Normal" : state.anim + "%";
     if (known && document.activeElement !== sel) sel.value = state.pattern;
   }
 
@@ -296,11 +331,14 @@
       const line = raw.trim();
       if (!line) continue;
       if (line.startsWith("#S|")) {
-        const [, on, cycle, n, bright] = line.split("|");
+        const [, on, cycle, n, bright, secs, anim] = line.split("|");
         state.on = on === "1";
         state.cycle = cycle === "1";
         state.pattern = Number(n);
         state.bright = Number(bright);
+        // Older sketches sent fewer number fields (the name was in their place).
+        state.secs = /^\d+$/.test(secs ?? "") ? Number(secs) : null;
+        state.anim = /^\d+$/.test(anim ?? "") ? Number(anim) : null;
         render();
       } else {
         log(line);
